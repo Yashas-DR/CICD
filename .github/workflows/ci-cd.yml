@@ -1,0 +1,120 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_IMAGE: your-dockerhub-yashas007/sample-node-app
+  DOCKER_TAG: ${{ github.sha }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: src/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd src
+        npm ci
+
+    - name: Run tests
+      run: |
+        cd src
+        npm test
+
+    - name: Run linting (optional)
+      run: |
+        cd src
+        npm run lint || echo "No linting configured"
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.DOCKER_IMAGE }}:latest
+          ${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Update deployment file
+      run: |
+        sed -i 's|your-dockerhub-username/sample-node-app:latest|${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}|' k8s/deployment.yaml
+
+    - name: Upload Kubernetes manifests
+      uses: actions/upload-artifact@v4
+      with:
+        name: k8s-manifests
+        path: k8s/
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Download Kubernetes manifests
+      uses: actions/download-artifact@v4
+      with:
+        name: k8s-manifests
+        path: k8s/
+
+    - name: Setup Minikube
+      uses: medyagh/setup-minikube@master
+      with:
+        minikube-version: 1.32.0
+        kubernetes-version: 1.28.3
+
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        
+        # Wait for deployment to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment/sample-app-deployment -n cicd-demo
+        
+        # Get deployment status
+        kubectl get pods -n cicd-demo
+        kubectl get services -n cicd-demo
+
+    - name: Test deployment
+      run: |
+        # Port forward to test the service
+        kubectl port-forward service/sample-app-service 8080:80 -n cicd-demo &
+        sleep 10
+        
+        # Test the endpoint
+        curl -f http://localhost:8080/ || exit 1
+        echo "Deployment test successful!"
