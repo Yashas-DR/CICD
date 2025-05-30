@@ -70,7 +70,7 @@ jobs:
 
     - name: Update deployment file
       run: |
-        sed -i 's|your-dockerhub-username/sample-node-app:latest|${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}|' k8s/deployment.yaml
+        sed -i 's|yashasdr007/sample-node-app:latest|${{ env.DOCKER_IMAGE }}:${{ env.DOCKER_TAG }}|' k8s/deployment.yaml
 
     - name: Upload Kubernetes manifests
       uses: actions/upload-artifact@v4
