@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  DOCKER_IMAGE: your-dockerhub-yashas007/sample-node-app
+  DOCKER_IMAGE: yashas007/sample-node-app
   DOCKER_TAG: ${{ github.sha }}
 
 jobs:
