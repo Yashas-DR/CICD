@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: sample-app
-        image: your-dockerhub-yashas007/sample-node-app:latest
+        image: yashas007/sample-node-app:latest
         ports:
         - containerPort: 3000
         env:
